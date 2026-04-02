@@ -1,24 +1,10 @@
-# Startup Program
+# Program
 
-## What does this startup do?
-<!-- One paragraph description of the product/service -->
-
-## Who is the target customer?
-<!-- Be specific: role, company size, industry, geography if relevant -->
-
-## What problem are they trying to solve?
-<!-- The job-to-be-done in their words, not yours -->
-
-## What makes this urgent for them now?
-<!-- What event or pressure is forcing them to act? -->
-
-## What are they doing today instead?
-<!-- Existing tools, workarounds, or doing nothing -->
-
-## Where does today's solution fall short?
-<!-- The specific gap or frustration your product addresses -->
+## What does this product do?
+<!-- One paragraph. Describe the product itself — what it is and what it delivers.
+     Do not describe the customer. The PULL variables in pull.csv carry that signal. -->
 
 ## Payment Link
-<!-- Paste your Stripe payment link below. This becomes the CTA on your landing page. -->
+<!-- Your Stripe payment link. This becomes the CTA on your landing page. -->
 <!-- Create one at dashboard.stripe.com → Payment Links -->
 https://buy.stripe.com/your-link-here

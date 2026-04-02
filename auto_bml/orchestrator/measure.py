@@ -1,16 +1,16 @@
 """
-Measure: pull metrics → score → ask Claude which variable to work on next
+Measure: pull metrics → ask Claude which variable to work on next
 → update pull.csv → open PR.
 
-The agent picks the variable it judges most worth improving based on the
-full run history. P/U/L → ad iterations; Lacking → landing page iterations.
+Three metrics passed directly to Claude: impressions, CTR, CVR.
+No derived score — Claude interprets the numbers.
 """
 import json
 
 import anthropic
 
 from .. import config as cfg
-from .. import pull_io, run_store, github_ops, scoring
+from .. import pull_io, run_store, github_ops
 from ..ads import client as ads_client, campaign as ads_campaign, metrics as ads_metrics
 from ..models import PULL_VARIABLES, BmlResult, BmlState, PullHypothesis, RunStatus
 
@@ -31,19 +31,16 @@ Current hypothesis:
 - look: {look}
 - lacking: {lacking}
 
-This run tested variable '{active_variable}'. Ad performance:
+This run tested variable '{active_variable}'. Results:
 - Impressions: {impressions}
-- Clicks: {clicks}
-- CTR: {ctr:.2%}
-- Avg CPC: ${cpc:.2f}
-- Conversion rate: {cvr:.1%}
-- PULL score: {score}/5
+- CTR: {ctr}
+- CVR: {cvr}
 
 Run history (most recent first):
 {history}
 
 Based on the data, decide:
-1. Which single variable would most improve the PULL score next iteration?
+1. Which single variable would most benefit from iteration next?
 2. What should its new value be?
 3. Should any variables be locked (confident they're well-defined)?
 
@@ -61,24 +58,22 @@ Rules:
 - Only change the variable you select as next_variable
 - Reproduce all other variables exactly as given above
 - lock should list variables you're confident are well-defined (can be empty)
-- lacking can only be tested via landing page; choose it when P/U/L signal is strong
+- lacking is tested via landing page; only choose it when impressions and CTR are strong
 """
 
 
 def _build_history(runs) -> str:
-    measured = [r for r in runs if r.pull_score is not None][-10:]
+    measured = [r for r in runs if r.metrics is not None][-10:]
     if not measured:
         return "No prior runs."
     lines = []
     for r in reversed(measured):
         m = r.metrics
-        ctr = f"{m.clicks/m.impressions:.2%}" if m and m.impressions else "—"
         lines.append(
-            f"  {r.run_id} | var={r.active_variable} | score={r.pull_score} | CTR={ctr} | CPC=${m.average_cpc_usd:.2f}" if m
-            else f"  {r.run_id} | var={r.active_variable} | score={r.pull_score}"
+            f"  {r.run_id} | var={r.active_variable} "
+            f"| impressions={m.impressions} | CTR={m.ctr:.2%} | CVR={m.cvr:.2%}"
         )
     return "\n".join(lines)
-
 
 
 def run() -> None:
@@ -95,7 +90,7 @@ def run() -> None:
     state = run_store.load_state()
 
     for run in ready:
-        print(f"Measuring run {run.run_id} (active: {run.active_variable})...")
+        print(f"Measuring run {run.run_id} (variable: {run.active_variable})...")
         try:
             metrics = ads_metrics.fetch(
                 ads_client_instance,
@@ -103,40 +98,31 @@ def run() -> None:
                 run.campaign_id,
                 run.started_at.date(),
             )
-            score = scoring.pull_score(metrics)
-            ctr = metrics.clicks / metrics.impressions if metrics.impressions else 0.0
-            print(f"  Score: {score}/5 | CTR: {ctr:.2%} | CPC: ${metrics.average_cpc_usd:.2f} | CVR: {metrics.conversion_rate:.1%}")
+            print(f"  impressions={metrics.impressions} | CTR={metrics.ctr:.2%} | CVR={metrics.cvr:.2%}")
 
             run.metrics = metrics
-            run.pull_score = score
             run.status = RunStatus.measured
             run_store.update(run)
 
-            # Ask Claude which variable to improve next
             hypothesis = run.pull_snapshot
-            history = _build_history(run_store.load())
-
             client = anthropic.Anthropic(api_key=config.anthropic_api_key)
-            prompt = _LEARN_PROMPT.format(
-                program=program or "Not provided.",
-                project=hypothesis.project,
-                urgency=hypothesis.urgency,
-                look=hypothesis.look,
-                lacking=hypothesis.lacking,
-                active_variable=run.active_variable,
-                impressions=metrics.impressions,
-                clicks=metrics.clicks,
-                ctr=ctr,
-                cpc=metrics.average_cpc_usd,
-                cvr=metrics.conversion_rate,
-                score=score,
-                history=history,
-            )
             message = client.messages.create(
                 model="claude-opus-4-6",
                 max_tokens=512,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": _LEARN_PROMPT.format(
+                    program=program or "Not provided.",
+                    project=hypothesis.project,
+                    urgency=hypothesis.urgency,
+                    look=hypothesis.look,
+                    lacking=hypothesis.lacking,
+                    active_variable=run.active_variable,
+                    impressions=metrics.impressions,
+                    ctr=f"{metrics.ctr:.2%}",
+                    cvr=f"{metrics.cvr:.2%}",
+                    history=_build_history(run_store.load()),
+                )}],
             )
+
             raw = message.content[0].text.strip()
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
@@ -155,28 +141,28 @@ def run() -> None:
                 lacking=data.get("lacking", hypothesis.lacking),
             )
 
-            # Update locked variables
             new_state = BmlState(
                 active_variable=next_variable,
                 locked={**state.locked, **{v: getattr(updated_hypothesis, v) for v in data.get("lock", [])}},
             )
             run_store.save_state(new_state)
 
-            pull_io.append_result(updated_hypothesis, run.run_id, run.active_variable, score)
+            pull_io.append_result(
+                updated_hypothesis, run.run_id, run.active_variable,
+                metrics.impressions, metrics.ctr, metrics.cvr,
+            )
 
             ads_campaign.pause_campaign(
                 ads_client_instance, config.google_ads_customer_id, run.campaign_id
             )
 
             mode = "landing page" if next_variable == "lacking" else "ads"
-            print(f"  Next: iterate '{next_variable}' via {mode}")
+            print(f"  Next: '{next_variable}' via {mode}")
 
-            result = BmlResult(
+            pr_url = github_ops.open_results_pr(BmlResult(
                 run=run,
                 updated_hypothesis=updated_hypothesis,
-                pull_score=score,
-            )
-            pr_url = github_ops.open_results_pr(result)
+            ))
             print(f"  PR: {pr_url}")
 
         except Exception as e:

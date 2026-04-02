@@ -52,7 +52,13 @@ class AdsMetrics(BaseModel):
         return self.average_cpc_micros / 1_000_000
 
     @property
-    def conversion_rate(self) -> float:
+    def ctr(self) -> float:
+        if self.impressions == 0:
+            return 0.0
+        return self.clicks / self.impressions
+
+    @property
+    def cvr(self) -> float:
         if self.clicks == 0:
             return 0.0
         return self.conversions / self.clicks
@@ -72,12 +78,10 @@ class RunMetadata(BaseModel):
     deploy_url: Optional[str] = None
     pull_snapshot: PullHypothesis = Field(default_factory=PullHypothesis)
     status: RunStatus = RunStatus.running
-    pull_score: Optional[float] = None
     metrics: Optional[AdsMetrics] = None
 
 
 class BmlResult(BaseModel):
     run: RunMetadata
     updated_hypothesis: PullHypothesis
-    pull_score: float
     pr_url: Optional[str] = None

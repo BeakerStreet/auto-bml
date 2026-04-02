@@ -6,7 +6,7 @@ from .models import PullHypothesis
 PULL_CSV = Path("pull.csv")
 PROGRAM_MD = Path("program.md")
 
-HEADERS = ["run_id", "phase", "pull_score", "project", "urgency", "look", "lacking"]
+HEADERS = ["run_id", "variable", "impressions", "ctr", "cvr", "project", "urgency", "look", "lacking"]
 
 
 def read_hypothesis() -> PullHypothesis:
@@ -32,8 +32,10 @@ def read_hypothesis() -> PullHypothesis:
 def append_result(
     hypothesis: PullHypothesis,
     run_id: str,
-    phase: str,
-    pull_score: float,
+    variable: str,
+    impressions: int,
+    ctr: float,
+    cvr: float,
 ) -> None:
     """Appends a new row — every iteration is preserved as a record."""
     write_header = not PULL_CSV.exists() or PULL_CSV.stat().st_size == 0
@@ -43,8 +45,10 @@ def append_result(
             writer.writeheader()
         writer.writerow({
             "run_id": run_id,
-            "phase": phase,
-            "pull_score": pull_score,
+            "variable": variable,
+            "impressions": impressions,
+            "ctr": f"{ctr:.2%}",
+            "cvr": f"{cvr:.2%}",
             **hypothesis.model_dump(),
         })
 

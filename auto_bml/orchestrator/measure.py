@@ -12,10 +12,7 @@ import anthropic
 from .. import config as cfg
 from .. import pull_io, run_store, github_ops, scoring
 from ..ads import client as ads_client, campaign as ads_campaign, metrics as ads_metrics
-from ..models import AD_VARIABLES, PULL_VARIABLES, BmlResult, BmlState, PullHypothesis, RunStatus
-
-# Warn if the agent has chosen the same variable this many times without score improvement
-LOCAL_MINIMA_THRESHOLD = 5
+from ..models import PULL_VARIABLES, BmlResult, BmlState, PullHypothesis, RunStatus
 
 _LEARN_PROMPT = """You are improving a PULL framework hypothesis based on Google Ads data.
 
@@ -82,21 +79,6 @@ def _build_history(runs) -> str:
         )
     return "\n".join(lines)
 
-
-def _local_minima_warning(runs, state: BmlState) -> str | None:
-    recent = [r for r in runs if r.pull_score is not None][-LOCAL_MINIMA_THRESHOLD:]
-    if len(recent) < LOCAL_MINIMA_THRESHOLD:
-        return None
-    same_var = all(r.active_variable == state.active_variable for r in recent)
-    scores = [r.pull_score for r in recent]
-    no_improvement = max(scores) == min(scores) or scores[-1] <= scores[0]
-    if same_var and no_improvement:
-        return (
-            f"The agent has tested '{state.active_variable}' for {LOCAL_MINIMA_THRESHOLD} "
-            f"consecutive runs without improvement (score range: {min(scores):.1f}–{max(scores):.1f}). "
-            f"Consider manually reframing this variable in pull.csv before the next run."
-        )
-    return None
 
 
 def run() -> None:
@@ -186,10 +168,6 @@ def run() -> None:
                 ads_client_instance, config.google_ads_customer_id, run.campaign_id
             )
 
-            warning = _local_minima_warning(run_store.load(), new_state)
-            if warning:
-                print(f"  Local minima warning: {warning}")
-
             mode = "landing page" if next_variable == "lacking" else "ads"
             print(f"  Next: iterate '{next_variable}' via {mode}")
 
@@ -197,7 +175,6 @@ def run() -> None:
                 run=run,
                 updated_hypothesis=updated_hypothesis,
                 pull_score=score,
-                local_minima_warning=warning,
             )
             pr_url = github_ops.open_results_pr(result)
             print(f"  PR: {pr_url}")

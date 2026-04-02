@@ -80,5 +80,4 @@ class BmlResult(BaseModel):
     run: RunMetadata
     updated_hypothesis: PullHypothesis
     pull_score: float
-    local_minima_warning: Optional[str] = None
     pr_url: Optional[str] = None

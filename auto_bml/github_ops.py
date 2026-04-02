@@ -58,13 +58,11 @@ def open_results_pr(result: BmlResult) -> str:
     hyp = result.updated_hypothesis
     m = run.metrics
     ctr = f"{m.clicks / m.impressions:.2%}" if m and m.impressions else "—"
-    warning_section = f"\n> ⚠️ **Local minima risk:** {result.local_minima_warning}\n" if result.local_minima_warning else ""
-
     pr_body = f"""## BML Run `{run.run_id}`
 
 **Variable tested:** `{run.active_variable}`
 **PULL Score:** {result.pull_score} / 5
-{warning_section}
+
 ### Ad Metrics
 
 | Metric | Value |

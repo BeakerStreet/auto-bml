@@ -3,9 +3,10 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import List
 
-from .models import RunMetadata, RunStatus
+from .models import BmlState, RunMetadata, RunStatus
 
 RUN_FILE = Path(".bml/runs.json")
+STATE_FILE = Path(".bml/state.json")
 ITERATION_HOURS = 6
 
 
@@ -45,3 +46,14 @@ def find_ready_runs(runs: List[RunMetadata]) -> List[RunMetadata]:
         r for r in runs
         if r.status == RunStatus.running and r.started_at <= cutoff
     ]
+
+
+def load_state() -> BmlState:
+    if not STATE_FILE.exists():
+        return BmlState()
+    return BmlState.model_validate(json.loads(STATE_FILE.read_text()))
+
+
+def save_state(state: BmlState) -> None:
+    STATE_FILE.parent.mkdir(exist_ok=True)
+    STATE_FILE.write_text(json.dumps(state.model_dump(mode="json"), indent=2))

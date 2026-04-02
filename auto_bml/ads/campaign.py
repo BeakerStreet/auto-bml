@@ -3,14 +3,14 @@ from datetime import date
 from google.ads.googleads.client import GoogleAdsClient
 
 from ..config import Config
-from ..models import PageCopy
+from ..models import AdCopy
 
 
 def create_experiment_campaign(
     client: GoogleAdsClient,
     config: Config,
     run_id: str,
-    copy: PageCopy,
+    copy: AdCopy,
 ) -> str:
     """
     Creates a Search campaign + ad group + responsive search ad for one BML run.

@@ -6,30 +6,47 @@ from .models import PullHypothesis
 PULL_CSV = Path("pull.csv")
 PROGRAM_MD = Path("program.md")
 
-HEADERS = ["project", "urgency", "look", "lacking"]
+HEADERS = ["run_id", "phase", "pull_score", "project", "urgency", "look", "lacking"]
 
 
 def read_hypothesis() -> PullHypothesis:
+    """Returns the most recent hypothesis row (last non-empty row)."""
     if not PULL_CSV.exists():
         return PullHypothesis()
     with PULL_CSV.open() as f:
         reader = csv.DictReader(f)
+        last = None
         for row in reader:
-            if any(row.get(h, "").strip() for h in HEADERS):
-                return PullHypothesis(
-                    project=row.get("project", "").strip(),
-                    urgency=row.get("urgency", "").strip(),
-                    look=row.get("look", "").strip(),
-                    lacking=row.get("lacking", "").strip(),
-                )
-    return PullHypothesis()
+            if any(row.get(h, "").strip() for h in ["project", "urgency", "look", "lacking"]):
+                last = row
+    if last is None:
+        return PullHypothesis()
+    return PullHypothesis(
+        project=last.get("project", "").strip(),
+        urgency=last.get("urgency", "").strip(),
+        look=last.get("look", "").strip(),
+        lacking=last.get("lacking", "").strip(),
+    )
 
 
-def write_hypothesis(hypothesis: PullHypothesis) -> None:
-    with PULL_CSV.open("w", newline="") as f:
+def append_result(
+    hypothesis: PullHypothesis,
+    run_id: str,
+    phase: str,
+    pull_score: float,
+) -> None:
+    """Appends a new row — every iteration is preserved as a record."""
+    write_header = not PULL_CSV.exists() or PULL_CSV.stat().st_size == 0
+    with PULL_CSV.open("a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=HEADERS)
-        writer.writeheader()
-        writer.writerow(hypothesis.model_dump())
+        if write_header:
+            writer.writeheader()
+        writer.writerow({
+            "run_id": run_id,
+            "phase": phase,
+            "pull_score": pull_score,
+            **hypothesis.model_dump(),
+        })
 
 
 def read_program() -> str:

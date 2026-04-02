@@ -1,70 +1,138 @@
+"""
+Phase-aware copy generation.
+
+P / U / L1 phases: generate ad copy only (iterate the active variable, lock the rest).
+L2 (LACKING) phase: generate landing page copy only (ad copy is locked from L1).
+"""
 import json
 
 import anthropic
 
-from .models import PageCopy, PullHypothesis
+from .models import AdCopy, BmlState, PageCopy, Phase, PullHypothesis
 
 _SYSTEM = """You are a direct-response copywriter who understands the PULL framework.
 PULL means customers are already trying to solve a specific problem — your job is to
 reflect their existing demand back at them, not to manufacture desire.
 
-Your copy must pass this test: a customer with genuine demand should feel
-"this was written for me." A customer without demand should feel nothing."""
+You are running a structured experiment. Only the variable marked as ACTIVE should be
+iterated. All LOCKED variables must be reproduced exactly as given — do not rephrase them."""
 
-_PROMPT = """Startup context:
+_AD_PROMPT = """Startup context:
 {program}
 
-Current PULL hypothesis:
-- Project (job they're trying to do): {project}
-- Urgency (why they can't ignore it): {urgency}
-- Look (what they're trying now): {look}
-- Lacking (how current solutions fall short): {lacking}
+PULL hypothesis — iterate ONLY the active variable:
 
-Write landing page copy and Google Ads copy that reflects this exact demand.
+  ACTIVE variable ({active_var}): {active_value}
 
-Return ONLY valid JSON matching this structure:
+  LOCKED variables (reproduce exactly):
+{locked_lines}
+
+Generate Google Ads copy that tests the ACTIVE variable in isolation.
+The locked variables inform context but must not be rewritten.
+
+Return ONLY valid JSON:
+{{
+  "ad_headlines": ["...", "...", "..."],
+  "ad_descriptions": ["...", "..."],
+  "keywords": ["keyword 1", "...", "...up to 20 keywords"]
+}}
+
+Constraints:
+- ad_headlines: max 30 characters each, 3–5 required
+- ad_descriptions: max 90 characters each, 2–4 required
+- keywords: phrase match, derived from the active variable ({active_var}) and look hypothesis
+- Do not invent claims not implied by the hypothesis
+"""
+
+_PAGE_PROMPT = """Startup context:
+{program}
+
+PULL hypothesis (all variables now validated — write landing page for LACKING):
+- project: {project}
+- urgency: {urgency}
+- look: {look}
+- lacking (ACTIVE — this is what the page must address): {lacking}
+
+Write landing page copy that fulfils the promise of the ad.
+The page must make someone who clicked the ad (because they have this demand) feel:
+"this was built for me."
+
+Return ONLY valid JSON:
 {{
   "headline": "...",
   "subheadline": "...",
   "body": "2-3 sentences max",
-  "cta": "...",
-  "ad_headlines": ["...", "...", "..."],
-  "ad_descriptions": ["...", "..."],
-  "keywords": ["keyword 1", "keyword 2", "...up to 20 keywords"]
+  "cta": "..."
 }}
-
-Constraints:
-- ad_headlines: max 30 characters each
-- ad_descriptions: max 90 characters each
-- keywords: phrase or broad match, directly derived from the project + look variables
-- Do not invent benefits not implied by the hypothesis
 """
 
 
-def generate(hypothesis: PullHypothesis, program: str, api_key: str) -> PageCopy:
+def _locked_lines(state: BmlState, hypothesis: PullHypothesis, active_phase: Phase) -> str:
+    lines = []
+  # Variables in order, skipping the active one
+    for phase in [Phase.PROJECT, Phase.URGENCY, Phase.LOOK]:
+        if phase == active_phase:
+            continue
+        var = phase.variable()
+        value = state.locked.get(var) or getattr(hypothesis, var) or "not yet defined"
+        lines.append(f"  {var}: {value}")
+    return "\n".join(lines) if lines else "  (none locked yet)"
+
+
+def generate_ad_copy(
+    hypothesis: PullHypothesis,
+    state: BmlState,
+    program: str,
+    api_key: str,
+) -> AdCopy:
+    active_phase = state.phase
+    active_var = active_phase.variable()
+    active_value = getattr(hypothesis, active_var) or "not yet defined"
+
     client = anthropic.Anthropic(api_key=api_key)
-
-    prompt = _PROMPT.format(
+    prompt = _AD_PROMPT.format(
         program=program or "Not provided.",
-        project=hypothesis.project or "Not specified.",
-        urgency=hypothesis.urgency or "Not specified.",
-        look=hypothesis.look or "Not specified.",
-        lacking=hypothesis.lacking or "Not specified.",
+        active_var=active_var,
+        active_value=active_value,
+        locked_lines=_locked_lines(state, hypothesis, active_phase),
     )
-
     message = client.messages.create(
         model="claude-opus-4-6",
         max_tokens=1024,
         system=_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
+    raw = _strip_fences(message.content[0].text)
+    return AdCopy(**json.loads(raw))
 
-    raw = message.content[0].text.strip()
-    # Strip markdown code fences if present
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
 
-    data = json.loads(raw)
-    return PageCopy(**data)
+def generate_page_copy(
+    hypothesis: PullHypothesis,
+    program: str,
+    api_key: str,
+) -> PageCopy:
+    client = anthropic.Anthropic(api_key=api_key)
+    prompt = _PAGE_PROMPT.format(
+        program=program or "Not provided.",
+        project=hypothesis.project or "not specified",
+        urgency=hypothesis.urgency or "not specified",
+        look=hypothesis.look or "not specified",
+        lacking=hypothesis.lacking or "not specified",
+    )
+    message = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=512,
+        system=_SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = _strip_fences(message.content[0].text)
+    return PageCopy(**json.loads(raw))
+
+
+def _strip_fences(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    return text.strip()

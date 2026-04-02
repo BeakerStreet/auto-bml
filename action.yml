@@ -1,0 +1,66 @@
+name: auto-bml
+description: Automated Build-Measure-Learn loop using Google Ads and Claude
+
+inputs:
+  command:
+    description: "Command to run: 'launch' or 'measure'"
+    required: true
+  anthropic_api_key:
+    description: Anthropic API key for Claude
+    required: true
+  google_ads_developer_token:
+    description: Google Ads developer token
+    required: true
+  google_ads_client_id:
+    description: Google Ads OAuth2 client ID
+    required: true
+  google_ads_client_secret:
+    description: Google Ads OAuth2 client secret
+    required: true
+  google_ads_refresh_token:
+    description: Google Ads OAuth2 refresh token
+    required: true
+  google_ads_customer_id:
+    description: Google Ads customer ID (without dashes)
+    required: true
+  deploy_provider:
+    description: "Deploy provider: 'vercel' or 'netlify'"
+    required: true
+  deploy_webhook_url:
+    description: Deploy webhook URL to trigger after page copy is generated
+    required: true
+  github_token:
+    description: GitHub token for committing results and opening PRs
+    required: true
+    default: ${{ github.token }}
+  daily_budget_usd:
+    description: Daily budget per campaign in USD
+    required: false
+    default: "20"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install auto-bml
+      shell: bash
+      run: pip install -r ${{ github.action_path }}/requirements.txt
+
+    - name: Run auto-bml
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        GOOGLE_ADS_DEVELOPER_TOKEN: ${{ inputs.google_ads_developer_token }}
+        GOOGLE_ADS_CLIENT_ID: ${{ inputs.google_ads_client_id }}
+        GOOGLE_ADS_CLIENT_SECRET: ${{ inputs.google_ads_client_secret }}
+        GOOGLE_ADS_REFRESH_TOKEN: ${{ inputs.google_ads_refresh_token }}
+        GOOGLE_ADS_CUSTOMER_ID: ${{ inputs.google_ads_customer_id }}
+        DEPLOY_PROVIDER: ${{ inputs.deploy_provider }}
+        DEPLOY_WEBHOOK_URL: ${{ inputs.deploy_webhook_url }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        DAILY_BUDGET_USD: ${{ inputs.daily_budget_usd }}
+      run: python -m auto_bml.cli ${{ inputs.command }}

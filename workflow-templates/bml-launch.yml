@@ -1,0 +1,33 @@
+name: BML Launch
+
+on:
+  workflow_dispatch:
+
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: beakerstreet/auto-bml@main
+        with:
+          command: launch
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          google_ads_developer_token: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+          google_ads_client_id: ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
+          google_ads_client_secret: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
+          google_ads_refresh_token: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+          google_ads_customer_id: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
+          deploy_provider: vercel            # change to 'netlify' if needed
+          deploy_webhook_url: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          daily_budget_usd: "20"
+
+      - name: Commit run metadata
+        run: |
+          git config user.name "auto-bml"
+          git config user.email "auto-bml@users.noreply.github.com"
+          git add .bml/runs.json bml_copy.json 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "bml: record launch run"
+          git push

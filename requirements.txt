@@ -1,0 +1,7 @@
+anthropic>=0.40.0
+google-ads>=24.0.0
+PyGithub>=2.3.0
+click>=8.1.0
+pydantic>=2.7.0
+python-dotenv>=1.0.0
+requests>=2.32.0

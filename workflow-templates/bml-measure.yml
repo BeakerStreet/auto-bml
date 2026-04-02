@@ -1,0 +1,27 @@
+name: BML Measure
+
+on:
+  schedule:
+    - cron: "0 * * * *"  # every hour; exits in <30s if no runs are ready
+  workflow_dispatch:
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: beakerstreet/auto-bml@main
+        with:
+          command: measure
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          google_ads_developer_token: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+          google_ads_client_id: ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
+          google_ads_client_secret: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
+          google_ads_refresh_token: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+          google_ads_customer_id: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
+          deploy_provider: vercel
+          deploy_webhook_url: ${{ secrets.DEPLOY_WEBHOOK_URL }}

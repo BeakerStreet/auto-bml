@@ -1,13 +1,13 @@
 """
-Launch phase: read current PULL phase → generate phase-appropriate copy
-→ deploy (only for LACKING phase) → create Google Ads campaign → store run metadata.
+Launch: read active variable from state → generate appropriate copy
+→ deploy if lacking → create Google Ads campaign → store run metadata.
 """
 import sys
 
 from .. import config as cfg
 from .. import pull_io, run_store, copywriter, deployer
 from ..ads import client as ads_client, campaign as ads_campaign
-from ..models import Phase, RunMetadata, RunStatus
+from ..models import AdCopy, RunMetadata, RunStatus
 
 
 def run() -> None:
@@ -26,16 +26,19 @@ def run() -> None:
         print("Error: pull.csv has no hypothesis. Fill in at least one variable.")
         sys.exit(1)
 
-    print(f"Phase: {state.phase.value} (iteration {state.iterations_in_phase + 1})")
-    print(f"Optimising: {state.phase.variable()} | metric: {state.phase.primary_metric()}")
+    print(f"Active variable: {state.active_variable}")
+    if state.uses_landing_page():
+        print("Mode: landing page iteration (lacking)")
+    else:
+        print("Mode: ad copy iteration")
     if state.locked:
-        print(f"Locked: {', '.join(f'{k}={v[:30]}' for k, v in state.locked.items())}")
+        print(f"Locked: {', '.join(state.locked.keys())}")
 
     client = ads_client.get_client(config)
-    run = RunMetadata(phase=state.phase, pull_snapshot=hypothesis)
+    run = RunMetadata(active_variable=state.active_variable, pull_snapshot=hypothesis)
 
-    if state.phase == Phase.LACKING:
-        print("Generating landing page copy (LACKING phase)...")
+    if state.uses_landing_page():
+        print("Generating landing page copy...")
         page_copy = copywriter.generate_page_copy(hypothesis, program, config.anthropic_api_key)
         print(f"  Headline: {page_copy.headline}")
 
@@ -45,15 +48,15 @@ def run() -> None:
         run.deploy_url = deploy_url
         print(f"  Deployed: {deploy_url}")
 
-        # For LACKING phase we still need keywords; use locked look variable
-        from ..models import AdCopy
+        # Minimal ad to drive traffic to the page; keywords from locked look variable
+        look_value = state.locked.get("look") or hypothesis.look or "solution"
         ad_copy = AdCopy(
-            ad_headlines=["Solution to your problem", "Finally, what you need", "Built for your workflow"],
+            ad_headlines=["Finally, what you need", "Stop settling for less", "Built for your workflow"],
             ad_descriptions=["Stop settling for tools that almost work.", "The gap is finally filled."],
-            keywords=[hypothesis.look] if hypothesis.look else ["solution"],
+            keywords=[look_value],
         )
     else:
-        print(f"Generating ad copy (iterating '{state.phase.variable()}')...")
+        print(f"Generating ad copy (active: {state.active_variable})...")
         ad_copy = copywriter.generate_ad_copy(hypothesis, state, program, config.anthropic_api_key)
         print(f"  Keywords: {', '.join(ad_copy.keywords[:5])}...")
 

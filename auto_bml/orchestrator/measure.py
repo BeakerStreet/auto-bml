@@ -1,31 +1,40 @@
 """
-Measure phase: find runs >= 6h → pull metrics → score → update state
-→ advance phase if converged → warn on local minima → open PR.
+Measure: pull metrics → score → ask Claude which variable to work on next
+→ update pull.csv → open PR.
+
+The agent picks the variable it judges most worth improving based on the
+full run history. P/U/L → ad iterations; Lacking → landing page iterations.
 """
 import json
 
 import anthropic
 
 from .. import config as cfg
-from .. import pull_io, run_store, github_ops, scoring, phase as phase_mod
+from .. import pull_io, run_store, github_ops, scoring
 from ..ads import client as ads_client, campaign as ads_campaign, metrics as ads_metrics
-from ..models import BmlResult, Phase, PullHypothesis, RunStatus
+from ..models import AD_VARIABLES, PULL_VARIABLES, BmlResult, BmlState, PullHypothesis, RunStatus
 
-_LEARN_PROMPT = """You are refining one variable in a PULL framework hypothesis based on Google Ads data.
+# Warn if the agent has chosen the same variable this many times without score improvement
+LOCAL_MINIMA_THRESHOLD = 5
+
+_LEARN_PROMPT = """You are improving a PULL framework hypothesis based on Google Ads data.
+
+PULL variables:
+- project: the specific job the customer is trying to complete
+- urgency: why they can't ignore it right now
+- look: what solutions they're currently evaluating
+- lacking: where those solutions fall short (tested via landing page, not ads)
 
 Startup context:
 {program}
 
-Current phase: {phase} (optimising '{active_var}' only)
-Primary metric for this phase: {primary_metric}
-
-Tested hypothesis:
+Current hypothesis:
 - project: {project}
 - urgency: {urgency}
 - look: {look}
 - lacking: {lacking}
 
-Ad performance:
+This run tested variable '{active_variable}'. Ad performance:
 - Impressions: {impressions}
 - Clicks: {clicks}
 - CTR: {ctr:.2%}
@@ -33,70 +42,61 @@ Ad performance:
 - Conversion rate: {cvr:.1%}
 - PULL score: {score}/5
 
-LOCKED variables (do not change these — reproduce exactly):
-{locked_lines}
+Run history (most recent first):
+{history}
 
-Based on market response, suggest a refined value for '{active_var}' only.
-If performance was strong (high {primary_metric}), tighten the framing.
-If weak, broaden or reframe.
+Based on the data, decide:
+1. Which single variable would most improve the PULL score next iteration?
+2. What should its new value be?
+3. Should any variables be locked (confident they're well-defined)?
 
-Return ONLY valid JSON with all four keys — locked values reproduced verbatim:
-{{"project": "...", "urgency": "...", "look": "...", "lacking": "..."}}
+Return ONLY valid JSON:
+{{
+  "next_variable": "project|urgency|look|lacking",
+  "project": "...",
+  "urgency": "...",
+  "look": "...",
+  "lacking": "...",
+  "lock": ["variable_name", ...]
+}}
+
+Rules:
+- Only change the variable you select as next_variable
+- Reproduce all other variables exactly as given above
+- lock should list variables you're confident are well-defined (can be empty)
+- lacking can only be tested via landing page; choose it when P/U/L signal is strong
 """
 
 
-def _refine_hypothesis(
-    current: PullHypothesis,
-    state,
-    metrics,
-    score: float,
-    program: str,
-    api_key: str,
-) -> PullHypothesis:
-    client = anthropic.Anthropic(api_key=api_key)
+def _build_history(runs) -> str:
+    measured = [r for r in runs if r.pull_score is not None][-10:]
+    if not measured:
+        return "No prior runs."
+    lines = []
+    for r in reversed(measured):
+        m = r.metrics
+        ctr = f"{m.clicks/m.impressions:.2%}" if m and m.impressions else "—"
+        lines.append(
+            f"  {r.run_id} | var={r.active_variable} | score={r.pull_score} | CTR={ctr} | CPC=${m.average_cpc_usd:.2f}" if m
+            else f"  {r.run_id} | var={r.active_variable} | score={r.pull_score}"
+        )
+    return "\n".join(lines)
 
-    active_var = state.phase.variable()
-    locked_lines = "\n".join(
-        f"  {k}: {v}" for k, v in state.locked.items() if k != active_var
-    ) or "  (none)"
 
-    ctr = metrics.clicks / metrics.impressions if metrics.impressions else 0.0
-
-    prompt = _LEARN_PROMPT.format(
-        program=program or "Not provided.",
-        phase=state.phase.value,
-        active_var=active_var,
-        primary_metric=state.phase.primary_metric(),
-        project=current.project,
-        urgency=current.urgency,
-        look=current.look,
-        lacking=current.lacking,
-        impressions=metrics.impressions,
-        clicks=metrics.clicks,
-        ctr=ctr,
-        cpc=metrics.average_cpc_usd,
-        cvr=metrics.conversion_rate,
-        score=score,
-        locked_lines=locked_lines,
-    )
-
-    message = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=512,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    raw = message.content[0].text.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    data = json.loads(raw)
-
-    # Enforce locked variables — do not allow agent to drift them
-    for var, val in state.locked.items():
-        data[var] = val
-
-    return PullHypothesis(**data)
+def _local_minima_warning(runs, state: BmlState) -> str | None:
+    recent = [r for r in runs if r.pull_score is not None][-LOCAL_MINIMA_THRESHOLD:]
+    if len(recent) < LOCAL_MINIMA_THRESHOLD:
+        return None
+    same_var = all(r.active_variable == state.active_variable for r in recent)
+    scores = [r.pull_score for r in recent]
+    no_improvement = max(scores) == min(scores) or scores[-1] <= scores[0]
+    if same_var and no_improvement:
+        return (
+            f"The agent has tested '{state.active_variable}' for {LOCAL_MINIMA_THRESHOLD} "
+            f"consecutive runs without improvement (score range: {min(scores):.1f}–{max(scores):.1f}). "
+            f"Consider manually reframing this variable in pull.csv before the next run."
+        )
+    return None
 
 
 def run() -> None:
@@ -113,7 +113,7 @@ def run() -> None:
     state = run_store.load_state()
 
     for run in ready:
-        print(f"Measuring run {run.run_id} (phase: {run.phase.value})...")
+        print(f"Measuring run {run.run_id} (active: {run.active_variable})...")
         try:
             metrics = ads_metrics.fetch(
                 ads_client_instance,
@@ -125,48 +125,81 @@ def run() -> None:
             ctr = metrics.clicks / metrics.impressions if metrics.impressions else 0.0
             print(f"  Score: {score}/5 | CTR: {ctr:.2%} | CPC: ${metrics.average_cpc_usd:.2f} | CVR: {metrics.conversion_rate:.1%}")
 
-            # Update state with this run's result
-            state = phase_mod.update_state(state, metrics, score)
-            warning = phase_mod.local_minima_warning(state)
-            if warning:
-                print(f"  ⚠ Local minima warning: {warning}")
-
-            # Refine hypothesis for the active variable
-            updated_hypothesis = _refine_hypothesis(
-                run.pull_snapshot, state, metrics, score, program, config.anthropic_api_key
-            )
-
-            # Check convergence and advance phase if warranted
-            phase_advanced = False
-            if phase_mod.should_advance(state):
-                best_value = getattr(updated_hypothesis, state.phase.variable())
-                print(f"  Phase {state.phase.value} converged. Locking '{state.phase.variable()}' = '{best_value[:50]}'")
-                state = phase_mod.advance_phase(state, best_value)
-                phase_advanced = True
-                if state.phase.next() is None and not phase_advanced:
-                    print("  All phases complete. BML loop finished.")
-
-            pull_io.append_result(updated_hypothesis, run.run_id, run.phase.value, score)
-            run_store.save_state(state)
-
             run.metrics = metrics
             run.pull_score = score
             run.status = RunStatus.measured
             run_store.update(run)
 
+            # Ask Claude which variable to improve next
+            hypothesis = run.pull_snapshot
+            history = _build_history(run_store.load())
+
+            client = anthropic.Anthropic(api_key=config.anthropic_api_key)
+            prompt = _LEARN_PROMPT.format(
+                program=program or "Not provided.",
+                project=hypothesis.project,
+                urgency=hypothesis.urgency,
+                look=hypothesis.look,
+                lacking=hypothesis.lacking,
+                active_variable=run.active_variable,
+                impressions=metrics.impressions,
+                clicks=metrics.clicks,
+                ctr=ctr,
+                cpc=metrics.average_cpc_usd,
+                cvr=metrics.conversion_rate,
+                score=score,
+                history=history,
+            )
+            message = client.messages.create(
+                model="claude-opus-4-6",
+                max_tokens=512,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = message.content[0].text.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            data = json.loads(raw)
+
+            next_variable = data.get("next_variable", run.active_variable)
+            if next_variable not in PULL_VARIABLES:
+                next_variable = run.active_variable
+
+            updated_hypothesis = PullHypothesis(
+                project=data.get("project", hypothesis.project),
+                urgency=data.get("urgency", hypothesis.urgency),
+                look=data.get("look", hypothesis.look),
+                lacking=data.get("lacking", hypothesis.lacking),
+            )
+
+            # Update locked variables
+            new_state = BmlState(
+                active_variable=next_variable,
+                locked={**state.locked, **{v: getattr(updated_hypothesis, v) for v in data.get("lock", [])}},
+            )
+            run_store.save_state(new_state)
+
+            pull_io.append_result(updated_hypothesis, run.run_id, run.active_variable, score)
+
             ads_campaign.pause_campaign(
                 ads_client_instance, config.google_ads_customer_id, run.campaign_id
             )
+
+            warning = _local_minima_warning(run_store.load(), new_state)
+            if warning:
+                print(f"  Local minima warning: {warning}")
+
+            mode = "landing page" if next_variable == "lacking" else "ads"
+            print(f"  Next: iterate '{next_variable}' via {mode}")
 
             result = BmlResult(
                 run=run,
                 updated_hypothesis=updated_hypothesis,
                 pull_score=score,
                 local_minima_warning=warning,
-                phase_advanced=phase_advanced,
             )
             pr_url = github_ops.open_results_pr(result)
-            result.pr_url = pr_url
             print(f"  PR: {pr_url}")
 
         except Exception as e:

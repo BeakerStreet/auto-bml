@@ -6,7 +6,7 @@ from .models import PullHypothesis
 PULL_CSV = Path("pull.csv")
 PROGRAM_MD = Path("program.md")
 
-HEADERS = ["run_id", "variable", "impressions", "ctr", "cvr", "project", "urgency", "look", "lacking"]
+HEADERS = ["run_id", "variable", "project", "urgency", "look", "lacking", "impressions", "ctr", "cvr"]
 
 
 def read_hypothesis() -> PullHypothesis:

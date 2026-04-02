@@ -21,12 +21,10 @@ def measure():
 
 
 @cli.command()
-@click.option("--repo", required=True, help="GitHub repo in owner/name format")
-@click.option("--github-token", envvar="GITHUB_TOKEN", required=True)
-def onboard(repo, github_token):
-    """One-time setup: Google Ads OAuth + push secrets to GitHub."""
+def onboard():
+    """One-time setup: read .env, OAuth, push secrets to GitHub, scaffold files."""
     from .ads import onboarding
-    onboarding.run(repo, github_token)
+    onboarding.run()
 
 
 if __name__ == "__main__":

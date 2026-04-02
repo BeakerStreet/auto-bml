@@ -53,3 +53,13 @@ def read_program() -> str:
     if not PROGRAM_MD.exists():
         return ""
     return PROGRAM_MD.read_text().strip()
+
+
+def read_stripe_link() -> str:
+    if not PROGRAM_MD.exists():
+        return ""
+    for line in PROGRAM_MD.read_text().splitlines():
+        line = line.strip()
+        if line.startswith("https://buy.stripe.com") or line.startswith("https://stripe.com"):
+            return line
+    return ""

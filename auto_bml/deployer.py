@@ -10,18 +10,19 @@ class DeployProvider(ABC):
         self.webhook_url = webhook_url
 
     @abstractmethod
-    def deploy(self, copy: PageCopy) -> str:
+    def deploy(self, copy: PageCopy, stripe_link: str) -> str:
         """Trigger a deploy and return the live URL."""
 
 
 class VercelProvider(DeployProvider):
-    def deploy(self, copy: PageCopy) -> str:
+    def deploy(self, copy: PageCopy, stripe_link: str) -> str:
         payload = {
             "env": {
                 "BML_HEADLINE": copy.headline,
                 "BML_SUBHEADLINE": copy.subheadline,
                 "BML_BODY": copy.body,
                 "BML_CTA": copy.cta,
+                "BML_CTA_URL": stripe_link,
             }
         }
         resp = requests.post(self.webhook_url, json=payload, timeout=30)
@@ -31,15 +32,14 @@ class VercelProvider(DeployProvider):
 
 
 class NetlifyProvider(DeployProvider):
-    def deploy(self, copy: PageCopy) -> str:
-        # Netlify build hooks don't accept env vars in the webhook payload;
-        # env vars must be set in the Netlify dashboard and read at build time
-        # from the repo's bml_copy.json file, which we write before triggering.
+    def deploy(self, copy: PageCopy, stripe_link: str) -> str:
         import json
         from pathlib import Path
 
-        copy_path = Path("bml_copy.json")
-        copy_path.write_text(json.dumps(copy.model_dump(), indent=2))
+        Path("bml_copy.json").write_text(json.dumps({
+            **copy.model_dump(),
+            "cta_url": stripe_link,
+        }, indent=2))
 
         resp = requests.post(self.webhook_url, timeout=30)
         resp.raise_for_status()

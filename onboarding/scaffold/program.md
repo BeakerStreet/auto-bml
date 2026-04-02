@@ -17,3 +17,8 @@
 
 ## Where does today's solution fall short?
 <!-- The specific gap or frustration your product addresses -->
+
+## Payment Link
+<!-- Paste your Stripe payment link below. This becomes the CTA on your landing page. -->
+<!-- Create one at dashboard.stripe.com → Payment Links -->
+https://buy.stripe.com/your-link-here

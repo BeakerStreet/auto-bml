@@ -11,7 +11,7 @@ class DeployProvider(ABC):
         self.site_url = site_url
 
     @abstractmethod
-    def deploy(self, copy: PageCopy, stripe_link: str) -> str:
+    def deploy(self, copy: PageCopy) -> str:
         """Trigger a deploy and return the live URL."""
 
 
@@ -21,14 +21,13 @@ class VercelProvider(DeployProvider):
         self.api_token = api_token
         self.project_id = project_id
 
-    def deploy(self, copy: PageCopy, stripe_link: str) -> str:
+    def deploy(self, copy: PageCopy) -> str:
         headers = {"Authorization": f"Bearer {self.api_token}"}
         env_vars = {
             "BML_HEADLINE": copy.headline,
             "BML_SUBHEADLINE": copy.subheadline,
             "BML_BODY": copy.body,
             "BML_CTA": copy.cta,
-            "BML_CTA_URL": stripe_link,
         }
 
         # Fetch existing env vars to get their IDs for updates
@@ -61,14 +60,11 @@ class VercelProvider(DeployProvider):
 
 
 class NetlifyProvider(DeployProvider):
-    def deploy(self, copy: PageCopy, stripe_link: str) -> str:
+    def deploy(self, copy: PageCopy) -> str:
         import json
         from pathlib import Path
 
-        Path("bml_copy.json").write_text(json.dumps({
-            **copy.model_dump(),
-            "cta_url": stripe_link,
-        }, indent=2))
+        Path("bml_copy.json").write_text(json.dumps(copy.model_dump(), indent=2))
 
         requests.post(self.webhook_url, timeout=30).raise_for_status()
         return self.site_url

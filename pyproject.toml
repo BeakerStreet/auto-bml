@@ -24,3 +24,6 @@ auto-bml = "auto_bml.cli:cli"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["auto_bml*"]
+
+[tool.setuptools.package-data]
+auto_bml = ["scaffold/*", "workflow_templates/*"]

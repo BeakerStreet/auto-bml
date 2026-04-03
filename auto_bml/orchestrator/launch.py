@@ -20,7 +20,6 @@ def run() -> None:
 
     hypothesis = pull_io.read_hypothesis()
     program = pull_io.read_program()
-    stripe_link = pull_io.read_stripe_link()
     state = run_store.load_state()
 
     if not any([hypothesis.project, hypothesis.urgency, hypothesis.look, hypothesis.lacking]):
@@ -45,7 +44,7 @@ def run() -> None:
 
         print("Deploying landing page...")
         provider = deployer.get_provider(config)
-        deploy_url = provider.deploy(page_copy, stripe_link)
+        deploy_url = provider.deploy(page_copy)
         run.deploy_url = deploy_url
         print(f"  Deployed: {deploy_url}")
 

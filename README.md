@@ -1,8 +1,8 @@
 # auto-bml
 
-Automated, iterative Build-Measure-Learn loops for landing pages, powered by Google Ads and Claude.
+Automated, iterative build-measure-learn loops for startups
 
-Modeled on [karpathy/autoresearch](https://github.com/karpathy/autoresearch): one mutable artifact (your landing page), one metric (customer buys), iterated by an agent until demand signal is maximised.
+One mutable artifact (your landing page), one metric (ads traction), iterated by an agent
 
 ## How it works
 
@@ -40,7 +40,6 @@ pull.csv + program.md
 - A Google Ads account with existing spend (developer token issued same-day)
 - A Google Cloud project with OAuth2 credentials — [create one here](https://console.cloud.google.com) in ~5 minutes: enable the Google Ads API, create an OAuth 2.0 Client ID (Desktop app type)
 - An Anthropic API key — [console.anthropic.com](https://console.anthropic.com)
-- A Stripe payment link — [dashboard.stripe.com → Payment Links](https://dashboard.stripe.com/payment-links)
 
 ---
 
@@ -54,7 +53,6 @@ Create a new GitHub repo. It needs one deployable page that reads the following 
 | `BML_SUBHEADLINE` | Subheadline |
 | `BML_BODY` | Body copy |
 | `BML_CTA` | CTA button text |
-| `BML_CTA_URL` | Stripe payment link URL |
 
 Any JS framework works (Next.js, Astro, plain HTML). The page just needs to render these values.
 
@@ -151,6 +149,6 @@ your-landing-page-repo/
 ├── .bml/
 │   └── runs.json           ← run state (committed automatically)
 ├── pull.csv                ← append-only iteration log
-├── program.md              ← product description + Stripe link
+├── program.md              ← product description
 └── bml_copy.json           ← latest copy snapshot (Netlify only)
 ```

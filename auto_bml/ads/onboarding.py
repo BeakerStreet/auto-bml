@@ -18,8 +18,8 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 REDIRECT_URI = "http://localhost:8080/callback"
 SCOPES = "https://www.googleapis.com/auth/adwords"
 
-SCAFFOLD_DIR = Path(__file__).parent.parent.parent / "onboarding" / "scaffold"
-WORKFLOW_DIR = Path(__file__).parent.parent.parent / "workflow-templates"
+SCAFFOLD_DIR = Path(__file__).parent.parent / "scaffold"
+WORKFLOW_DIR = Path(__file__).parent.parent / "workflow_templates"
 
 REQUIRED = [
     "GOOGLE_ADS_CUSTOMER_ID",
@@ -30,7 +30,6 @@ REQUIRED = [
     "DEPLOY_PROVIDER",
     "DEPLOY_WEBHOOK_URL",
     "DEPLOY_SITE_URL",
-    "STRIPE_PAYMENT_LINK",
     "GITHUB_TOKEN",
 ]
 
@@ -45,10 +44,10 @@ def _detect_repo() -> str:
         ).strip()
         # https://github.com/owner/repo.git  or  git@github.com:owner/repo.git
         if url.startswith("https://"):
-            parts = url.rstrip(".git").split("/")
+            parts = url.removesuffix(".git").split("/")
             return f"{parts[-2]}/{parts[-1]}"
         else:
-            part = url.split(":")[-1].rstrip(".git")
+            part = url.split(":")[-1].removesuffix(".git")
             return part
     except Exception:
         raise RuntimeError(
@@ -149,17 +148,12 @@ def _push_github_secrets(token: str, repo: str, secrets: dict) -> None:
         print(f"  ✓ {name}")
 
 
-def _scaffold(repo_path: Path, stripe_link: str) -> None:
+def _scaffold(repo_path: Path) -> None:
     for f in ["pull.csv", "program.md"]:
         dest = repo_path / f
         if not dest.exists():
             shutil.copy(SCAFFOLD_DIR / f, dest)
             print(f"  ✓ {f}")
-
-    program = (repo_path / "program.md").read_text()
-    if stripe_link and stripe_link not in program:
-        with (repo_path / "program.md").open("a") as f:
-            f.write(f"\n## Payment Link\n{stripe_link}\n")
 
     bml_dir = repo_path / ".bml"
     bml_dir.mkdir(exist_ok=True)
@@ -221,7 +215,7 @@ def run() -> None:
     } | {"GOOGLE_ADS_REFRESH_TOKEN": env["GOOGLE_ADS_REFRESH_TOKEN"]})
 
     print("Scaffolding repo files...")
-    _scaffold(Path("."), env.get("STRIPE_PAYMENT_LINK", ""))
+    _scaffold(Path("."))
 
     print("\nDone.")
     print("Next: fill in program.md and pull.csv, then trigger BML Launch in GitHub Actions.")

@@ -17,8 +17,8 @@ _HTML_TEMPLATE = """\
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{headline}</title>
   <style>
-    *, *::before, *::after {{ box-sizing: border-box; }}
-    body {{
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #fff;
@@ -28,27 +28,27 @@ _HTML_TEMPLATE = """\
       justify-content: center;
       min-height: 100vh;
       padding: 2rem;
-    }}
-    main {{ max-width: 600px; width: 100%; }}
-    h1 {{
+    }
+    main { max-width: 600px; width: 100%; }
+    h1 {
       font-size: clamp(1.8rem, 5vw, 3rem);
       line-height: 1.1;
       font-weight: 800;
       margin: 0 0 1rem;
-    }}
-    .sub {{
+    }
+    .sub {
       font-size: 1.2rem;
       color: #444;
       line-height: 1.4;
       margin: 0 0 1.25rem;
-    }}
-    .body {{
+    }
+    .body {
       font-size: 1rem;
       color: #555;
       line-height: 1.7;
       margin: 0 0 2rem;
-    }}
-    .cta {{
+    }
+    .cta {
       display: inline-block;
       background: #111;
       color: #fff;
@@ -57,8 +57,8 @@ _HTML_TEMPLATE = """\
       text-decoration: none;
       font-weight: 600;
       font-size: 1rem;
-    }}
-    .cta:hover {{ opacity: 0.8; }}
+    }
+    .cta:hover { opacity: 0.8; }
   </style>
 </head>
 <body>
@@ -74,11 +74,12 @@ _HTML_TEMPLATE = """\
 
 
 def _render_html(copy: PageCopy) -> str:
-    return _HTML_TEMPLATE.format(
-        headline=copy.headline,
-        subheadline=copy.subheadline,
-        body=copy.body,
-        cta=copy.cta,
+    return (
+        _HTML_TEMPLATE
+        .replace("{headline}", copy.headline)
+        .replace("{subheadline}", copy.subheadline)
+        .replace("{body}", copy.body)
+        .replace("{cta}", copy.cta)
     )
 
 

@@ -20,8 +20,11 @@ jobs:
           google_ads_client_secret: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
           google_ads_refresh_token: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
           google_ads_customer_id: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
-          deploy_provider: vercel            # change to 'netlify' if needed
+          deploy_provider: ${{ secrets.DEPLOY_PROVIDER }}
           deploy_webhook_url: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          deploy_site_url: ${{ secrets.DEPLOY_SITE_URL }}
+          vercel_api_token: ${{ secrets.VERCEL_API_TOKEN }}
+          vercel_project_id: ${{ secrets.VERCEL_PROJECT_ID }}
           daily_budget_usd: "20"
 
       - name: Commit run metadata

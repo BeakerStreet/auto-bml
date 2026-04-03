@@ -29,9 +29,12 @@ REQUIRED = [
     "ANTHROPIC_API_KEY",
     "DEPLOY_PROVIDER",
     "DEPLOY_WEBHOOK_URL",
+    "DEPLOY_SITE_URL",
     "STRIPE_PAYMENT_LINK",
     "GITHUB_TOKEN",
 ]
+
+VERCEL_REQUIRED = ["VERCEL_API_TOKEN", "VERCEL_PROJECT_ID"]
 
 
 def _detect_repo() -> str:
@@ -133,10 +136,6 @@ def _push_github_secrets(token: str, repo: str, secrets: dict) -> None:
     key_data = requests.get(
         f"https://api.github.com/repos/{repo}/actions/secrets/public-key",
         headers=headers,
-    ).raise_for_status() or None
-    key_data = requests.get(
-        f"https://api.github.com/repos/{repo}/actions/secrets/public-key",
-        headers=headers,
     ).json()
     pub_key = public.PublicKey(key_data["key"].encode(), encoding.Base64Encoder)
 
@@ -187,7 +186,9 @@ def run() -> None:
 
     env = {**dotenv_values(env_file)}
 
-    missing = [k for k in REQUIRED if not env.get(k)]
+    provider = env.get("DEPLOY_PROVIDER", "").lower()
+    required = REQUIRED + (VERCEL_REQUIRED if provider == "vercel" else [])
+    missing = [k for k in required if not env.get(k)]
     if missing:
         raise SystemExit(f".env is missing required values: {', '.join(missing)}")
 
@@ -214,8 +215,9 @@ def run() -> None:
     print("  ✓ Connected")
 
     print(f"Pushing secrets to {repo}...")
+    secret_keys = REQUIRED + (VERCEL_REQUIRED if provider == "vercel" else [])
     _push_github_secrets(env["GITHUB_TOKEN"], repo, {
-        k: env[k] for k in REQUIRED if k != "GITHUB_TOKEN"
+        k: env[k] for k in secret_keys if k != "GITHUB_TOKEN" and env.get(k)
     } | {"GOOGLE_ADS_REFRESH_TOKEN": env["GOOGLE_ADS_REFRESH_TOKEN"]})
 
     print("Scaffolding repo files...")

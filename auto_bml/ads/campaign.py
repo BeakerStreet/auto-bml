@@ -1,5 +1,6 @@
 from datetime import date
 
+from google.api_core import protobuf_helpers
 from google.ads.googleads.client import GoogleAdsClient
 
 from ..config import Config

@@ -44,7 +44,7 @@ def run() -> None:
         print(f"  Headline: {page_copy.headline}")
 
         print("Deploying landing page...")
-        provider = deployer.get_provider(config.deploy_provider, config.deploy_webhook_url)
+        provider = deployer.get_provider(config)
         deploy_url = provider.deploy(page_copy, stripe_link)
         run.deploy_url = deploy_url
         print(f"  Deployed: {deploy_url}")

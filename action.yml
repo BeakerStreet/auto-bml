@@ -27,8 +27,19 @@ inputs:
     description: "Deploy provider: 'vercel' or 'netlify'"
     required: true
   deploy_webhook_url:
-    description: Deploy webhook URL to trigger after page copy is generated
+    description: Deploy hook URL to trigger a rebuild
     required: true
+  deploy_site_url:
+    description: Live URL of the landing page (e.g. your-project.vercel.app)
+    required: true
+  vercel_api_token:
+    description: Vercel personal access token (required when deploy_provider is 'vercel')
+    required: false
+    default: ""
+  vercel_project_id:
+    description: Vercel project ID (required when deploy_provider is 'vercel')
+    required: false
+    default: ""
   github_token:
     description: GitHub token for committing results and opening PRs
     required: true
@@ -48,7 +59,7 @@ runs:
 
     - name: Install auto-bml
       shell: bash
-      run: pip install -r ${{ github.action_path }}/requirements.txt
+      run: pip install ${{ github.action_path }}
 
     - name: Run auto-bml
       shell: bash
@@ -61,6 +72,9 @@ runs:
         GOOGLE_ADS_CUSTOMER_ID: ${{ inputs.google_ads_customer_id }}
         DEPLOY_PROVIDER: ${{ inputs.deploy_provider }}
         DEPLOY_WEBHOOK_URL: ${{ inputs.deploy_webhook_url }}
+        DEPLOY_SITE_URL: ${{ inputs.deploy_site_url }}
+        VERCEL_API_TOKEN: ${{ inputs.vercel_api_token }}
+        VERCEL_PROJECT_ID: ${{ inputs.vercel_project_id }}
         GITHUB_TOKEN: ${{ inputs.github_token }}
         DAILY_BUDGET_USD: ${{ inputs.daily_budget_usd }}
-      run: python -m auto_bml.cli ${{ inputs.command }}
+      run: auto-bml ${{ inputs.command }}

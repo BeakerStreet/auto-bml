@@ -27,8 +27,7 @@ def fetch(
             metrics.impressions,
             metrics.clicks,
             metrics.average_cpc,
-            metrics.conversions,
-            campaign_criterion.keyword.text
+            metrics.conversions
         FROM campaign
         WHERE campaign.id = {campaign_id}
           AND segments.date BETWEEN '{yesterday}' AND '{today}'

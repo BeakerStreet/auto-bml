@@ -29,7 +29,7 @@ def open_results_pr(result: BmlResult) -> str:
     new_content = Path(pull_csv_path).read_text()
     repo.update_file(
         path=pull_csv_path,
-        message=f"bml({run.run_id}): update PULL hypotheses (score={result.pull_score})",
+        message=f"bml({run.run_id}): update PULL hypotheses",
         content=new_content,
         sha=current.sha,
         branch=branch,

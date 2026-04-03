@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -20,17 +21,12 @@ jobs:
           google_ads_client_secret: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
           google_ads_refresh_token: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
           google_ads_customer_id: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
-          deploy_provider: ${{ secrets.DEPLOY_PROVIDER }}
-          deploy_webhook_url: ${{ secrets.DEPLOY_WEBHOOK_URL }}
-          deploy_site_url: ${{ secrets.DEPLOY_SITE_URL }}
-          vercel_api_token: ${{ secrets.VERCEL_API_TOKEN }}
-          vercel_project_id: ${{ secrets.VERCEL_PROJECT_ID }}
           daily_budget_usd: "20"
 
       - name: Commit run metadata
         run: |
           git config user.name "auto-bml"
           git config user.email "auto-bml@users.noreply.github.com"
-          git add .bml/runs.json bml_copy.json 2>/dev/null || true
+          git add .bml/runs.json
           git diff --cached --quiet || git commit -m "bml: record launch run"
           git push

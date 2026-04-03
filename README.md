@@ -11,7 +11,7 @@ Each iteration is a 6-hour window of live Google Ads data:
 ```
 pull.csv + program.md
     → Claude generates landing page copy + ad copy + keywords
-    → Landing page deployed via Vercel/Netlify webhook
+    → Landing page committed to docs/ and served via GitHub Pages
     → Google Ads campaign launched
     → [6 hours]
     → Impressions, CTR, CVR pulled from Google Ads
@@ -43,57 +43,34 @@ pull.csv + program.md
 
 ---
 
-### Step 1 — Create a landing page repo
+### Step 1 — Create a GitHub repo
 
-Create a new GitHub repo. It needs one deployable page that reads the following environment variables at build time:
-
-| Variable | Content |
-|---|---|
-| `BML_HEADLINE` | Main headline |
-| `BML_SUBHEADLINE` | Subheadline |
-| `BML_BODY` | Body copy |
-| `BML_CTA` | CTA button text |
-
-Any JS framework works (Next.js, Astro, plain HTML). The page just needs to render these values.
+Create a new public GitHub repo. This is where your landing page and iteration history will live.
 
 ---
 
-### Step 2 — Deploy to Vercel or Netlify
-
-Connect your repo to [Vercel](https://vercel.com) or [Netlify](https://netlify.com).
-
-You'll get a free subdomain automatically — `your-project.vercel.app` or `your-project.netlify.app`. This is your landing page URL and your Google Ads destination URL. No custom domain needed to start.
-
-Then create a deploy hook:
-- **Vercel**: Project Settings → Git → Deploy Hooks → Create hook
-- **Netlify**: Site Configuration → Build & Deploy → Build hooks → Add build hook
-
-Copy the webhook URL — you'll need it in the next step.
-
----
-
-### Step 3 — Install auto-bml and create your .env
+### Step 2 — Install auto-bml and create your .env
 
 ```bash
 pip install auto-bml
 ```
 
-In the root of your landing page repo, create a `.env` file. Copy the template:
+In the root of your repo, create a `.env` file:
 
 ```bash
 curl -o .env https://raw.githubusercontent.com/beakerstreet/auto-bml/main/.env.example
 ```
 
-Fill in every field. All fields are documented inline. Leave `GOOGLE_ADS_REFRESH_TOKEN` blank — onboarding fills it in automatically.
+Fill in every field. Leave `GOOGLE_ADS_REFRESH_TOKEN` blank — onboarding fills it in automatically.
 
 Add `.env` to your `.gitignore` if it isn't already.
 
 ---
 
-### Step 4 — Run onboarding
+### Step 3 — Run onboarding
 
 ```bash
-cd your-landing-page-repo
+cd your-repo
 auto-bml onboard
 ```
 
@@ -102,11 +79,12 @@ This will:
 2. Open a browser for Google OAuth2 (the only interactive step)
 3. Validate your Google Ads connection
 4. Push all credentials as GitHub Actions secrets to your repo
-5. Create `pull.csv`, `program.md`, `.bml/runs.json`, and workflow files
+5. Enable GitHub Pages on the repo (served from `docs/`)
+6. Create `pull.csv`, `program.md`, `.bml/runs.json`, and workflow files
 
 ---
 
-### Step 5 — Fill in your context
+### Step 4 — Fill in your context
 
 **`program.md`** — describe what your product does in one paragraph. Do not describe the target customer; the PULL variables carry that signal.
 
@@ -121,11 +99,11 @@ lacking:  where those solutions fall short
 
 ---
 
-### Step 6 — Launch
+### Step 5 — Launch
 
 Commit and push. Then go to your repo on GitHub → Actions → BML Launch → Run workflow.
 
-The first iteration starts immediately. Results arrive as a PR ~6 hours later.
+The first iteration starts immediately. Your landing page goes live at `https://your-username.github.io/your-repo`. Results arrive as a PR ~6 hours later.
 
 ---
 
@@ -136,19 +114,21 @@ The first iteration starts immediately. Results arrive as a PR ~6 hours later.
 | Google Ads | ~$5 (6hrs at $20/day default budget) |
 | Claude API | ~$0.05 |
 | GitHub Actions | ~2 CI minutes |
+| Hosting | Free (GitHub Pages) |
 
 ---
 
 ## Repo structure after onboarding
 
 ```
-your-landing-page-repo/
+your-repo/
 ├── .github/workflows/
 │   ├── bml-launch.yml      ← trigger manually to start a run
 │   └── bml-measure.yml     ← runs hourly, measures after 6h window
 ├── .bml/
 │   └── runs.json           ← run state (committed automatically)
+├── docs/
+│   └── index.html          ← landing page (updated each iteration)
 ├── pull.csv                ← append-only iteration log
-├── program.md              ← product description
-└── bml_copy.json           ← latest copy snapshot (Netlify only)
+└── program.md              ← product description
 ```

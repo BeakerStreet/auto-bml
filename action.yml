@@ -23,23 +23,6 @@ inputs:
   google_ads_customer_id:
     description: Google Ads customer ID (without dashes)
     required: true
-  deploy_provider:
-    description: "Deploy provider: 'vercel' or 'netlify'"
-    required: true
-  deploy_webhook_url:
-    description: Deploy hook URL to trigger a rebuild
-    required: true
-  deploy_site_url:
-    description: Live URL of the landing page (e.g. your-project.vercel.app)
-    required: true
-  vercel_api_token:
-    description: Vercel personal access token (required when deploy_provider is 'vercel')
-    required: false
-    default: ""
-  vercel_project_id:
-    description: Vercel project ID (required when deploy_provider is 'vercel')
-    required: false
-    default: ""
   github_token:
     description: GitHub token for committing results and opening PRs
     required: true
@@ -70,11 +53,7 @@ runs:
         GOOGLE_ADS_CLIENT_SECRET: ${{ inputs.google_ads_client_secret }}
         GOOGLE_ADS_REFRESH_TOKEN: ${{ inputs.google_ads_refresh_token }}
         GOOGLE_ADS_CUSTOMER_ID: ${{ inputs.google_ads_customer_id }}
-        DEPLOY_PROVIDER: ${{ inputs.deploy_provider }}
-        DEPLOY_WEBHOOK_URL: ${{ inputs.deploy_webhook_url }}
-        DEPLOY_SITE_URL: ${{ inputs.deploy_site_url }}
-        VERCEL_API_TOKEN: ${{ inputs.vercel_api_token }}
-        VERCEL_PROJECT_ID: ${{ inputs.vercel_project_id }}
         GITHUB_TOKEN: ${{ inputs.github_token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
         DAILY_BUDGET_USD: ${{ inputs.daily_budget_usd }}
       run: auto-bml ${{ inputs.command }}

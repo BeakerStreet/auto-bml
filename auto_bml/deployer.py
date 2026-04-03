@@ -1,87 +1,108 @@
-from abc import ABC, abstractmethod
+"""
+GitHub Pages deployer.
 
-import requests
+Commits docs/index.html to the repo via GitHub API.
+GitHub Pages rebuilds automatically on push.
+"""
+from github import Github, UnknownObjectException
 
+from .config import Config
 from .models import PageCopy
 
+_HTML_TEMPLATE = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{headline}</title>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #fff;
+      color: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem;
+    }}
+    main {{ max-width: 600px; width: 100%; }}
+    h1 {{
+      font-size: clamp(1.8rem, 5vw, 3rem);
+      line-height: 1.1;
+      font-weight: 800;
+      margin: 0 0 1rem;
+    }}
+    .sub {{
+      font-size: 1.2rem;
+      color: #444;
+      line-height: 1.4;
+      margin: 0 0 1.25rem;
+    }}
+    .body {{
+      font-size: 1rem;
+      color: #555;
+      line-height: 1.7;
+      margin: 0 0 2rem;
+    }}
+    .cta {{
+      display: inline-block;
+      background: #111;
+      color: #fff;
+      padding: 0.85rem 2rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 1rem;
+    }}
+    .cta:hover {{ opacity: 0.8; }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>{headline}</h1>
+    <p class="sub">{subheadline}</p>
+    <p class="body">{body}</p>
+    <a href="#" class="cta">{cta}</a>
+  </main>
+</body>
+</html>
+"""
 
-class DeployProvider(ABC):
-    def __init__(self, webhook_url: str, site_url: str):
-        self.webhook_url = webhook_url
-        self.site_url = site_url
 
-    @abstractmethod
+def _render_html(copy: PageCopy) -> str:
+    return _HTML_TEMPLATE.format(
+        headline=copy.headline,
+        subheadline=copy.subheadline,
+        body=copy.body,
+        cta=copy.cta,
+    )
+
+
+class GitHubPagesProvider:
+    def __init__(self, github_token: str, repo: str):
+        self.github_token = github_token
+        self.repo = repo  # "owner/repo"
+
     def deploy(self, copy: PageCopy) -> str:
-        """Trigger a deploy and return the live URL."""
+        html = _render_html(copy)
+        g = Github(self.github_token)
+        repo = g.get_repo(self.repo)
+        path = "docs/index.html"
+        try:
+            existing = repo.get_contents(path)
+            repo.update_file(path, "bml: update landing page copy", html, existing.sha)
+        except UnknownObjectException:
+            repo.create_file(path, "bml: create landing page", html)
+        owner, name = self.repo.split("/")
+        return f"https://{owner}.github.io/{name}"
 
 
-class VercelProvider(DeployProvider):
-    def __init__(self, webhook_url: str, site_url: str, api_token: str, project_id: str):
-        super().__init__(webhook_url, site_url)
-        self.api_token = api_token
-        self.project_id = project_id
-
-    def deploy(self, copy: PageCopy) -> str:
-        headers = {"Authorization": f"Bearer {self.api_token}"}
-        env_vars = {
-            "BML_HEADLINE": copy.headline,
-            "BML_SUBHEADLINE": copy.subheadline,
-            "BML_BODY": copy.body,
-            "BML_CTA": copy.cta,
-        }
-
-        # Fetch existing env vars to get their IDs for updates
-        resp = requests.get(
-            f"https://api.vercel.com/v9/projects/{self.project_id}/env",
-            headers=headers,
-            timeout=30,
-        )
-        resp.raise_for_status()
-        existing = {e["key"]: e["id"] for e in resp.json().get("envs", [])}
-
-        for key, value in env_vars.items():
-            if key in existing:
-                requests.patch(
-                    f"https://api.vercel.com/v9/projects/{self.project_id}/env/{existing[key]}",
-                    headers=headers,
-                    json={"value": value},
-                    timeout=30,
-                ).raise_for_status()
-            else:
-                requests.post(
-                    f"https://api.vercel.com/v9/projects/{self.project_id}/env",
-                    headers=headers,
-                    json={"key": key, "value": value, "type": "plain", "target": ["production"]},
-                    timeout=30,
-                ).raise_for_status()
-
-        requests.post(self.webhook_url, timeout=30).raise_for_status()
-        return self.site_url
-
-
-class NetlifyProvider(DeployProvider):
-    def deploy(self, copy: PageCopy) -> str:
-        import json
-        from pathlib import Path
-
-        Path("bml_copy.json").write_text(json.dumps(copy.model_dump(), indent=2))
-
-        requests.post(self.webhook_url, timeout=30).raise_for_status()
-        return self.site_url
-
-
-def get_provider(config) -> DeployProvider:
-    provider = config.deploy_provider.lower()
-    if provider == "vercel":
-        return VercelProvider(
-            webhook_url=config.deploy_webhook_url,
-            site_url=config.deploy_site_url,
-            api_token=config.vercel_api_token,
-            project_id=config.vercel_project_id,
-        )
-    if provider == "netlify":
-        return NetlifyProvider(
-            webhook_url=config.deploy_webhook_url,
-            site_url=config.deploy_site_url,
-        )
-    raise ValueError(f"Unknown deploy provider: {config.deploy_provider!r}. Use 'vercel' or 'netlify'.")
+def get_provider(config: Config) -> GitHubPagesProvider:
+    return GitHubPagesProvider(
+        github_token=config.github_token,
+        repo=config.github_repository,
+    )

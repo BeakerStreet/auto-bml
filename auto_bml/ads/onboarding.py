@@ -27,13 +27,8 @@ REQUIRED = [
     "GOOGLE_ADS_CLIENT_ID",
     "GOOGLE_ADS_CLIENT_SECRET",
     "ANTHROPIC_API_KEY",
-    "DEPLOY_PROVIDER",
-    "DEPLOY_WEBHOOK_URL",
-    "DEPLOY_SITE_URL",
     "GITHUB_TOKEN",
 ]
-
-VERCEL_REQUIRED = ["VERCEL_API_TOKEN", "VERCEL_PROJECT_ID"]
 
 
 def _detect_repo() -> str:
@@ -148,6 +143,23 @@ def _push_github_secrets(token: str, repo: str, secrets: dict) -> None:
         print(f"  ✓ {name}")
 
 
+def _enable_github_pages(token: str, repo: str) -> str:
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    resp = requests.post(
+        f"https://api.github.com/repos/{repo}/pages",
+        headers=headers,
+        json={"source": {"branch": "main", "path": "/docs"}},
+    )
+    if resp.status_code not in (201, 409):  # 409 = already enabled
+        resp.raise_for_status()
+    owner, name = repo.split("/")
+    return f"https://{owner}.github.io/{name}"
+
+
 def _scaffold(repo_path: Path) -> None:
     for f in ["pull.csv", "program.md"]:
         dest = repo_path / f
@@ -180,9 +192,7 @@ def run() -> None:
 
     env = {**dotenv_values(env_file)}
 
-    provider = env.get("DEPLOY_PROVIDER", "").lower()
-    required = REQUIRED + (VERCEL_REQUIRED if provider == "vercel" else [])
-    missing = [k for k in required if not env.get(k)]
+    missing = [k for k in REQUIRED if not env.get(k)]
     if missing:
         raise SystemExit(f".env is missing required values: {', '.join(missing)}")
 
@@ -194,7 +204,6 @@ def run() -> None:
         env["GOOGLE_ADS_REFRESH_TOKEN"] = _run_oauth_flow(
             env["GOOGLE_ADS_CLIENT_ID"], env["GOOGLE_ADS_CLIENT_SECRET"]
         )
-        # Write refresh token back to .env
         lines = env_file.read_text().splitlines()
         with env_file.open("w") as f:
             for line in lines:
@@ -209,13 +218,17 @@ def run() -> None:
     print("  ✓ Connected")
 
     print(f"Pushing secrets to {repo}...")
-    secret_keys = REQUIRED + (VERCEL_REQUIRED if provider == "vercel" else [])
     _push_github_secrets(env["GITHUB_TOKEN"], repo, {
-        k: env[k] for k in secret_keys if k != "GITHUB_TOKEN" and env.get(k)
+        k: env[k] for k in REQUIRED if k != "GITHUB_TOKEN"
     } | {"GOOGLE_ADS_REFRESH_TOKEN": env["GOOGLE_ADS_REFRESH_TOKEN"]})
+
+    print("Enabling GitHub Pages...")
+    pages_url = _enable_github_pages(env["GITHUB_TOKEN"], repo)
+    print(f"  ✓ {pages_url}")
 
     print("Scaffolding repo files...")
     _scaffold(Path("."))
 
     print("\nDone.")
+    print(f"Landing page: {pages_url}")
     print("Next: fill in program.md and pull.csv, then trigger BML Launch in GitHub Actions.")

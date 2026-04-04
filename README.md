@@ -9,14 +9,19 @@ One mutable artifact (your landing page), one metric (ads traction), iterated by
 Each iteration is a 6-hour window of live Google Ads data:
 
 ```
-pull.csv + program.md
-    → Claude generates landing page copy + ad copy + keywords
-    → Landing page committed to docs/ and served via GitHub Pages
-    → Google Ads campaign launched
-    → [6 hours]
-    → Impressions, CTR, CVR pulled from Google Ads
-    → Claude refines PULL hypotheses and picks next variable to test
-    → pull.csv updated, PR opened with results
+Using pull.csv + program.md, auto-bml:
+
+    → reviews pull.csv hypotheses and picks a variable to test (see PULL variables below)
+    → generates landing page, commits to docs/
+    → serves landing page via GitHub Pages
+    → generates ad copy
+    → generates keywords
+    → launches Google Ads campaign
+        → waits [6 hours]
+    → pulls Impressions, CTR, CVR from Google Ads
+    → updates pull.csv, opens PR with results
+    → reviews pull.csv hypotheses and picks a variable to test
+
 ```
 
 ## The PULL variables
@@ -28,7 +33,7 @@ pull.csv + program.md
 | `look` | What solutions are they currently evaluating? |
 | `lacking` | Where do those solutions fall short? |
 
-`project`, `urgency`, and `look` are tested via ad copy. `lacking` is tested via the landing page. The customer does not need to be defined — whoever clicks an ad written from these four variables is, by definition, the customer.
+`project`, `urgency`, and `look` are tested via ad copy. `lacking` is tested via the landing page.
 
 ---
 

@@ -1,0 +1,4 @@
+- [ ] would it be interesting to have a 'build', 'measure', and 'learn' sub-task in the loop expressly called out? each task is its own area of expertise
+- [ ] how would a user be guided through the keys-and-tokens collection phase at onboarding? 
+- [ ] how might this be a claude skill instead of a python library
+- [ ] how might we successfully validate lacking (presently ignored 👀)

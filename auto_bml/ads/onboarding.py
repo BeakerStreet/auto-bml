@@ -196,6 +196,17 @@ def run() -> None:
     if missing:
         raise SystemExit(f".env is missing required values: {', '.join(missing)}")
 
+    if not env.get("CONVERSION_URL"):
+        conversion_url = input(
+            "Conversion URL — where should the landing page CTA send people?\n"
+            "(e.g. https://yourapp.com/signup, or press Enter to leave as '#'): "
+        ).strip()
+        if conversion_url:
+            env["CONVERSION_URL"] = conversion_url
+            with env_file.open("a") as f:
+                f.write(f"\nCONVERSION_URL={conversion_url}\n")
+            print("  ✓ CONVERSION_URL saved to .env")
+
     repo = _detect_repo()
     print(f"Repo: {repo}")
 
@@ -218,9 +229,11 @@ def run() -> None:
     print("  ✓ Connected")
 
     print(f"Pushing secrets to {repo}...")
-    _push_github_secrets(env["GITHUB_TOKEN"], repo, {
-        k: env[k] for k in REQUIRED if k != "GITHUB_TOKEN"
-    } | {"GOOGLE_ADS_REFRESH_TOKEN": env["GOOGLE_ADS_REFRESH_TOKEN"]})
+    secrets = {k: env[k] for k in REQUIRED if k != "GITHUB_TOKEN"}
+    secrets["GOOGLE_ADS_REFRESH_TOKEN"] = env["GOOGLE_ADS_REFRESH_TOKEN"]
+    if env.get("CONVERSION_URL"):
+        secrets["CONVERSION_URL"] = env["CONVERSION_URL"]
+    _push_github_secrets(env["GITHUB_TOKEN"], repo, secrets)
 
     print("Enabling GitHub Pages...")
     pages_url = _enable_github_pages(env["GITHUB_TOKEN"], repo)
@@ -230,5 +243,5 @@ def run() -> None:
     _scaffold(Path("."))
 
     print("\nDone.")
-    print(f"Landing page: {pages_url}")
+    print(f"Landing page (when lacking is active): {pages_url}/bml/")
     print("Next: fill in program.md and pull.csv, then trigger BML Launch in GitHub Actions.")

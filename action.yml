@@ -31,6 +31,10 @@ inputs:
     description: Daily budget per campaign in USD
     required: false
     default: "20"
+  conversion_url:
+    description: URL the landing page CTA links to (where visitors go after converting)
+    required: false
+    default: "#"
 
 runs:
   using: composite
@@ -56,4 +60,5 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         DAILY_BUDGET_USD: ${{ inputs.daily_budget_usd }}
+        CONVERSION_URL: ${{ inputs.conversion_url }}
       run: auto-bml ${{ inputs.command }}

@@ -22,6 +22,7 @@ jobs:
           google_ads_refresh_token: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
           google_ads_customer_id: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
           daily_budget_usd: "20"
+          conversion_url: ${{ secrets.CONVERSION_URL }}
 
       - name: Commit run metadata
         run: |

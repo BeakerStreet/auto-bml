@@ -66,44 +66,47 @@ _HTML_TEMPLATE = """\
     <h1>{headline}</h1>
     <p class="sub">{subheadline}</p>
     <p class="body">{body}</p>
-    <a href="#" class="cta">{cta}</a>
+    <a href="{cta_url}" class="cta">{cta}</a>
   </main>
 </body>
 </html>
 """
 
 
-def _render_html(copy: PageCopy) -> str:
+def _render_html(copy: PageCopy, cta_url: str) -> str:
     return (
         _HTML_TEMPLATE
         .replace("{headline}", copy.headline)
         .replace("{subheadline}", copy.subheadline)
         .replace("{body}", copy.body)
         .replace("{cta}", copy.cta)
+        .replace("{cta_url}", cta_url)
     )
 
 
 class GitHubPagesProvider:
-    def __init__(self, github_token: str, repo: str):
+    def __init__(self, github_token: str, repo: str, conversion_url: str):
         self.github_token = github_token
         self.repo = repo  # "owner/repo"
+        self.conversion_url = conversion_url
 
     def deploy(self, copy: PageCopy) -> str:
-        html = _render_html(copy)
+        html = _render_html(copy, self.conversion_url)
         g = Github(self.github_token)
         repo = g.get_repo(self.repo)
-        path = "docs/index.html"
+        path = "docs/bml/index.html"
         try:
             existing = repo.get_contents(path)
             repo.update_file(path, "bml: update landing page copy", html, existing.sha)
         except UnknownObjectException:
             repo.create_file(path, "bml: create landing page", html)
         owner, name = self.repo.split("/")
-        return f"https://{owner}.github.io/{name}"
+        return f"https://{owner}.github.io/{name}/bml/"
 
 
 def get_provider(config: Config) -> GitHubPagesProvider:
     return GitHubPagesProvider(
         github_token=config.github_token,
         repo=config.github_repository,
+        conversion_url=config.conversion_url,
     )

@@ -13,6 +13,7 @@ class Config:
     github_token: str
     github_repository: str
     daily_budget_usd: float
+    conversion_url: str = "#"
 
 
 def load() -> Config:
@@ -40,4 +41,5 @@ def load() -> Config:
         github_token=os.environ["GITHUB_TOKEN"],
         github_repository=os.environ["GITHUB_REPOSITORY"],
         daily_budget_usd=float(os.getenv("DAILY_BUDGET_USD", "20")),
+        conversion_url=os.getenv("CONVERSION_URL", "#"),
     )
